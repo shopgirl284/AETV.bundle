@@ -6,14 +6,13 @@ BASE_PATH = 'http://www.aetv.com'
 def Start():
 
 	# setup the default viewgroups for the plugin	
-	Plugin.AddViewGroup("InfoList", viewMode="InfoList", mediaType="items")
-	Plugin.AddViewGroup("List", viewMode="List", mediaType="items")
-	Plugin.AddViewGroup("Details", viewMode="InfoList", mediaType="items")
+	Plugin.AddViewGroup('List', viewMode='List', mediaType='items')
+	Plugin.AddViewGroup('InfoList', viewMode='InfoList', mediaType='items')
 
 	# Setup the default attributes for the ObjectContainer
 	ObjectContainer.title1 = TITLE
-	ObjectContainer.view_group = 'List'
-	
+	ObjectContainer.view_group = 'InfoList'
+
 	# Setup some basic things the plugin needs to know about
 	HTTP.CacheTime = CACHE_1HOUR
 
@@ -21,7 +20,7 @@ def Start():
 @handler('/video/aetv', TITLE)
 def MainMenu():
 
-	oc = ObjectContainer()
+	oc = ObjectContainer(view_group='List')
 
 	data = HTML.ElementFromURL(VIDEOS_URL)
 
@@ -59,10 +58,10 @@ def MainMenu():
 	return oc
 
 ####################################################################################################
-@route("/video/aetv/showspage")
+@route('/video/aetv/showspage')
 def ShowsPage(url, title):
 
-	oc = ObjectContainer(title2=title)
+	oc = ObjectContainer(title2=title, view_group='InfoList')
 	data = HTML.ElementFromURL(url)		
 	allData = data.xpath("//div[contains(@class,'video_playlist-item') and not(contains(@class, 'locked'))]")
 
