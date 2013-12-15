@@ -1,17 +1,12 @@
 TITLE = 'A&E'
-VIDEOS_URL = 'http://www.aetv.com/videos/'
+SHOWS_URL = 'http://www.aetv.com/shows'
 BASE_PATH = 'http://www.aetv.com'
 
 ####################################################################################################
 def Start():
 
-	# setup the default viewgroups for the plugin	
-	Plugin.AddViewGroup('List', viewMode='List', mediaType='items')
-	Plugin.AddViewGroup('InfoList', viewMode='InfoList', mediaType='items')
-
 	# Setup the default attributes for the ObjectContainer
 	ObjectContainer.title1 = TITLE
-	ObjectContainer.view_group = 'InfoList'
 
 	# Setup some basic things the plugin needs to know about
 	HTTP.CacheTime = CACHE_1HOUR
@@ -20,79 +15,127 @@ def Start():
 @handler('/video/aetv', TITLE)
 def MainMenu():
 
-	oc = ObjectContainer(view_group='List')
+	oc = ObjectContainer()
 
-	data = HTML.ElementFromURL(VIDEOS_URL)
+	oc.add(DirectoryObject(key=Callback(PopShows, title="Most Popular"), title="Most Popular"))
+	oc.add(DirectoryObject(key=Callback(MainShows, title="Featured"), title="Featured"))
+	oc.add(DirectoryObject(key=Callback(MainShows, title="Classics"), title="Classics"))
 
-	# to get all shows from main video page xpath: //ul[@id='av-list1']/li/a
-	showList = data.xpath("//ul[@id='av-list1']/li/a")
+	return oc
+#####################################################################################################
+@route('/video/aetv/mainshows')
+def MainShows(title):
 
-	# if it's desirable to get only full episode shows at some point use this instead:
-	#showList = data.xpath("id('Video')/li/a[contains(text(), 'Full Episode')]")
+	oc = ObjectContainer(title2=title)
 
-	# 58 results from the main /videos/ page (as above)
-	# or we can also pull from the All Vidoes page - http://www.aetv.com/allshows.jsp
-	# xpath: //ul[@id='NowShowing_container_unordered']/li/a
-	# 37 results from this page -- not sure if this is up and coming or legacy, let's keep this
-	# info around just in case
+	data = HTML.ElementFromURL(SHOWS_URL)
+	# this gets shows from each section of the menu on the show page for featured and classics
+	showList = data.xpath('//div/strong[text()="%s	"]/parent::div/following-sibling::div//ul/li/a' %title)
 
 	for s in showList:
-		if s.get('href')[:7]=="http://":
-			url = s.get('href')
-		else:
-			url= BASE_PATH + s.get('href')
-
-		# we can't currently handle "classics", "lifestyle" or "indiefilms"
-		if url.startswith("http://www.aetv.com/classic/video/") or url.startswith("http://www.aetv.com/lifestyle/video/") or url.startswith("http://www.aetv.com/indiefilms/"):
-			continue
-
+		url = s.xpath('./@href')[0]
+		if not url.startswith('http://'):
+			url = BASE_PATH + url
 		show=s.xpath('text()')[0]
 
-		oc.add(
-			DirectoryObject(
-				key = Callback(ShowsPage, url=url, title=show),
-				title = show
-			)
-		)
+		oc.add(DirectoryObject(key = Callback(ShowSection, url=url, title=show), title = show))
+
+	return oc
+
+###################################################################################################
+# This function gets the shows that have images for popular shows
+@route('/video/aetv/popshows')
+def PopShows(title):
+
+	oc = ObjectContainer(title2=title)
+
+	data = HTML.ElementFromURL(SHOWS_URL)
+	showList = data.xpath('//div/h2[text()="Most Popular"]/parent::div//li/div/a')
+
+	for s in showList:
+		thumb = s.xpath('./img/@src')[0]
+		url = s.xpath('./@href')[0]
+		if not url.startswith('http://'):
+			url= BASE_PATH + url
+		show=s.xpath('./img/@alt')[0]
+
+		oc.add(DirectoryObject(key = Callback(ShowSection, url=url, title=show, thumb = thumb), thumb = thumb, title = show))
 
 	return oc
 
 ####################################################################################################
-@route('/video/aetv/showspage')
-def ShowsPage(url, title):
+@route('/video/aetv/showsection')
+def ShowSection(title, url, thumb=''):
 
-	oc = ObjectContainer(title2=title, view_group='InfoList')
-	data = HTML.ElementFromURL(url)		
-	allData = data.xpath("//div[contains(@class,'video_playlist-item') and not(contains(@class, 'locked'))]")
+	oc = ObjectContainer(title2=title)
 
-	for s in allData:
-		try:
-			iid = s.xpath("./*[contains(@class,'id_holder')]/text()")[0]
-			title = s.xpath(".//p[@class='video_details-title']/text()")[0]
-			if s.xpath("./p[1]/strong[contains(text(),'CLIP')]"):
-				title = "CLIP: "+title
-
-			thumb_url = s.xpath("./a/img/@realsrc")[0]
-			Log.Debug("thumb_url: "+thumb_url)
-			video_url = s.xpath("./a/@onclick")[0].split("'")[1] + "#" + iid
-			duration = Datetime.MillisecondsFromString(s.xpath("./p/span/text()")[0])
-			try: episode = int(s.xpath("./div[contains(@class,'video_details')]/p[contains(text(), 'Episode')]/text()")[0].split(':')[1])
-			except: episode=0
-
-			summary = s.xpath("./div[contains(@class,'video_details')]/p[contains(@class,'video_details-synopsis')]/text()")[0]
-
-			oc.add(
-				EpisodeObject(
-					url = video_url,
-					title = title,
-					duration = duration,
-					summary = summary, 
-	 				thumb = Resource.ContentsOfURLWithFallback(url=thumb_url),
-					index = episode
-				)
-			)
-		except:
-			# if we land here we didn't have appropriate data (mostly like iid) to playback so skip this one
-			continue
+	if thumb:
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes", thumb=thumb))
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips", thumb=thumb))
+	else:
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes"))
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips"))
 
 	return oc
+####################################################################################################
+@route('/video/aetv/showspage')
+def ShowsPage(url, title, vid_type):
+
+	oc = ObjectContainer(title2=title)
+	if url.endswith('/video'):
+		local_url = url
+	else:
+		local_url = url +'/video'
+	data = HTML.ElementFromURL(local_url)		
+	allData = data.xpath('//ul[@id="%s-ul"]/li[not(contains(@class, "behind-wall"))]' %vid_type)
+
+	for s in allData:
+		class_info = s.xpath('./@class')[0]
+		# Ads are picked up in this list so we check for an ending of -ad
+		if not class_info.endswith('-ad'):
+			title = s.xpath('./@data-title')[0]
+			thumb_url = s.xpath('./a/img/@src')[0]
+			video_url = s.xpath('./a/@href')[0]
+			if not video_url.startswith('http:'):
+				video_url = BASE_PATH + video_url
+			duration = Datetime.MillisecondsFromString(s.xpath('.//span[contains(@class,"duration")]/text()')[0])
+			summary = s.xpath("./@data-description")[0]
+			try: episode = int(s.xpath('.//span[contains(@class,"tile-episode")]/text()')[0].split('E')[1])
+			except: episode=0
+
+			if episode:
+				try: season = int(s.xpath('.//span[contains(@class,"season")]/text()')[0].split('S')[1])
+				except: season=1
+				date = Datetime.ParseDate(s.xpath('./@data-date')[0].split(':')[1])
+				oc.add(
+					EpisodeObject(
+						url = video_url,
+						title = title,
+						duration = duration,
+						summary = summary,
+						thumb = Resource.ContentsOfURLWithFallback(url=thumb_url),
+						originally_available_at = date,
+						index = episode,
+						season = season
+					)
+				)
+			else:
+				oc.add(
+					VideoClipObject(
+						url = video_url,
+						title = title,
+						duration = duration,
+						summary = summary,
+						thumb = Resource.ContentsOfURLWithFallback(url=thumb_url)
+					)
+				)
+
+		else:
+			# if we land here it was an ad so skip this one
+			continue
+
+	if len(oc) < 1:
+		Log ('still no value for objects')
+		return ObjectContainer(header="Empty", message="There are no videos to display for this show right now.") 
+	else:
+		return oc
