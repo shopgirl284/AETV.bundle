@@ -5,10 +5,7 @@ BASE_PATH = 'http://www.aetv.com'
 ####################################################################################################
 def Start():
 
-	# Setup the default attributes for the ObjectContainer
 	ObjectContainer.title1 = TITLE
-
-	# Setup some basic things the plugin needs to know about
 	HTTP.CacheTime = CACHE_1HOUR
 
 ####################################################################################################
@@ -22,6 +19,7 @@ def MainMenu():
 	oc.add(DirectoryObject(key=Callback(MainShows, title="Classics"), title="Classics"))
 
 	return oc
+
 #####################################################################################################
 @route('/video/aetv/mainshows')
 def MainShows(title):
@@ -34,9 +32,11 @@ def MainShows(title):
 
 	for s in showList:
 		url = s.xpath('./@href')[0]
+
 		if not url.startswith('http://'):
 			url = BASE_PATH + url
-		show=s.xpath('text()')[0]
+
+		show = s.xpath('text()')[0]
 
 		oc.add(DirectoryObject(key = Callback(ShowSection, url=url, title=show), title = show))
 
@@ -55,9 +55,11 @@ def PopShows(title):
 	for s in showList:
 		thumb = s.xpath('./img/@src')[0]
 		url = s.xpath('./@href')[0]
+
 		if not url.startswith('http://'):
 			url= BASE_PATH + url
-		show=s.xpath('./img/@alt')[0]
+
+		show = s.xpath('./img/@alt')[0]
 
 		oc.add(DirectoryObject(key = Callback(ShowSection, url=url, title=show, thumb = thumb), thumb = thumb, title = show))
 
@@ -77,65 +79,71 @@ def ShowSection(title, url, thumb=''):
 		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips"))
 
 	return oc
+
 ####################################################################################################
 @route('/video/aetv/showspage')
 def ShowsPage(url, title, vid_type):
 
 	oc = ObjectContainer(title2=title)
+
 	if url.endswith('/video'):
 		local_url = url
 	else:
 		local_url = url +'/video'
+
 	data = HTML.ElementFromURL(local_url)		
 	allData = data.xpath('//ul[@id="%s-ul"]/li[not(contains(@class, "behind-wall"))]' %vid_type)
 
 	for s in allData:
 		class_info = s.xpath('./@class')[0]
+
 		# Ads are picked up in this list so we check for an ending of -ad
-		if not class_info.endswith('-ad'):
-			title = s.xpath('./@data-title')[0]
-			thumb_url = s.xpath('./a/img/@src')[0]
-			video_url = s.xpath('./a/@href')[0]
-			if not video_url.startswith('http:'):
-				video_url = BASE_PATH + video_url
-			duration = Datetime.MillisecondsFromString(s.xpath('.//span[contains(@class,"duration")]/text()')[0])
-			summary = s.xpath("./@data-description")[0]
-			try: episode = int(s.xpath('.//span[contains(@class,"tile-episode")]/text()')[0].split('E')[1])
-			except: episode=0
-
-			if episode:
-				try: season = int(s.xpath('.//span[contains(@class,"season")]/text()')[0].split('S')[1])
-				except: season=1
-				date = Datetime.ParseDate(s.xpath('./@data-date')[0].split(':')[1])
-				oc.add(
-					EpisodeObject(
-						url = video_url,
-						title = title,
-						duration = duration,
-						summary = summary,
-						thumb = Resource.ContentsOfURLWithFallback(url=thumb_url),
-						originally_available_at = date,
-						index = episode,
-						season = season
-					)
-				)
-			else:
-				oc.add(
-					VideoClipObject(
-						url = video_url,
-						title = title,
-						duration = duration,
-						summary = summary,
-						thumb = Resource.ContentsOfURLWithFallback(url=thumb_url)
-					)
-				)
-
-		else:
-			# if we land here it was an ad so skip this one
+		if class_info.endswith('-ad'):
 			continue
 
+		title = s.xpath('./@data-title')[0]
+		thumb_url = s.xpath('./a/img/@src')[0]
+
+		video_url = s.xpath('./a/@href')[0]
+		if not video_url.startswith('http:'):
+			video_url = BASE_PATH + video_url
+
+		duration = Datetime.MillisecondsFromString(s.xpath('.//span[contains(@class,"duration")]/text()')[0])
+		summary = s.xpath("./@data-description")[0]
+
+		try: episode = int(s.xpath('.//span[contains(@class,"tile-episode")]/text()')[0].split('E')[1])
+		except: episode = None
+
+		if episode:
+			try: season = int(s.xpath('.//span[contains(@class,"season")]/text()')[0].split('S')[1])
+			except: season = 1
+			date = Datetime.ParseDate(s.xpath('./@data-date')[0].split(':')[1])
+
+			oc.add(
+				EpisodeObject(
+					url = video_url,
+					title = title,
+					duration = duration,
+					summary = summary,
+					thumb = Resource.ContentsOfURLWithFallback(url=thumb_url),
+					originally_available_at = date,
+					index = episode,
+					season = season
+				)
+			)
+		else:
+			oc.add(
+				VideoClipObject(
+					url = video_url,
+					title = title,
+					duration = duration,
+					summary = summary,
+					thumb = Resource.ContentsOfURLWithFallback(url=thumb_url)
+				)
+			)
+
 	if len(oc) < 1:
-		Log ('still no value for objects')
+		#Log ('still no value for objects')
 		return ObjectContainer(header="Empty", message="There are no videos to display for this show right now.") 
 	else:
 		return oc
