@@ -117,7 +117,13 @@ def ShowsPage(url, title, vid_type):
 		if episode:
 			try: season = int(s.xpath('.//span[contains(@class,"season")]/text()')[0].split('S')[1])
 			except: season = 1
-			date = Datetime.ParseDate(s.xpath('./@data-date')[0].split(':')[1])
+
+			date = s.xpath('./@data-date')[0]
+
+			if ': ' in date:
+				date = Datetime.ParseDate(date.split(': ')[-1])
+			else:
+				date = None
 
 			oc.add(
 				EpisodeObject(
