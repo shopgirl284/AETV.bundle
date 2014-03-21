@@ -1,6 +1,7 @@
 TITLE = 'A&E'
 SHOWS_URL = 'http://www.aetv.com/shows'
 BASE_PATH = 'http://www.aetv.com'
+INNER_CONTAINER = '?_pjax=.inner-container'
 
 ####################################################################################################
 def Start():
@@ -11,6 +12,17 @@ def Start():
 ####################################################################################################
 @handler('/video/aetv', TITLE)
 def MainMenu():
+
+	oc = ObjectContainer()
+
+	oc.add(DirectoryObject(key=Callback(AllShow), title="Shows"))
+	oc.add(DirectoryObject(key=Callback(ShowSection, title="Videos", url='http://www.aetv.com/video'), title="Videos"))
+
+	return oc
+
+####################################################################################################
+@route('/video/aetv/allshow')
+def AllShow():
 
 	oc = ObjectContainer()
 
@@ -87,9 +99,9 @@ def ShowsPage(url, title, vid_type):
 	oc = ObjectContainer(title2=title)
 
 	if url.endswith('/video'):
-		local_url = url
+		local_url = url + INNER_CONTAINER
 	else:
-		local_url = url +'/video'
+		local_url = url +'/video' + INNER_CONTAINER
 
 	data = HTML.ElementFromURL(local_url)		
 	allData = data.xpath('//ul[@id="%s-ul"]/li[not(contains(@class, "behind-wall"))]' %vid_type)
@@ -111,19 +123,18 @@ def ShowsPage(url, title, vid_type):
 		duration = Datetime.MillisecondsFromString(s.xpath('.//span[contains(@class,"duration")]/text()')[0])
 		summary = s.xpath("./@data-description")[0]
 
+		try: show_name = s.xpath('.//h5[@class="series"]/text()')[0]
+		except: show_name = None
+		if show_name:
+			title = '%s - %s' %(show_name, title)
+        
 		try: episode = int(s.xpath('.//span[contains(@class,"tile-episode")]/text()')[0].split('E')[1])
 		except: episode = None
-
+            
 		if episode:
 			try: season = int(s.xpath('.//span[contains(@class,"season")]/text()')[0].split('S')[1])
 			except: season = 1
-
-			date = s.xpath('./@data-date')[0]
-
-			if ': ' in date:
-				date = Datetime.ParseDate(date.split(': ')[-1])
-			else:
-				date = None
+			date = Datetime.ParseDate(s.xpath('./@data-date')[0].split(':')[1])
 
 			oc.add(
 				EpisodeObject(
@@ -137,6 +148,7 @@ def ShowsPage(url, title, vid_type):
 					season = season
 				)
 			)
+			oc.objects.sort(key = lambda obj: obj.originally_available_at, reverse=True)
 		else:
 			oc.add(
 				VideoClipObject(
@@ -147,7 +159,7 @@ def ShowsPage(url, title, vid_type):
 					thumb = Resource.ContentsOfURLWithFallback(url=thumb_url)
 				)
 			)
-
+			
 	if len(oc) < 1:
 		#Log ('still no value for objects')
 		return ObjectContainer(header="Empty", message="There are no videos to display for this show right now.") 
