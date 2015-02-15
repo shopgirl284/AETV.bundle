@@ -27,7 +27,7 @@ def AllShow():
 	oc = ObjectContainer()
 
 	oc.add(DirectoryObject(key=Callback(PopShows, title="Most Popular"), title="Most Popular"))
-	oc.add(DirectoryObject(key=Callback(MainShows, title="Featured"), title="Featured"))
+	oc.add(DirectoryObject(key=Callback(MainShows, title="Current"), title="Current"))
 	oc.add(DirectoryObject(key=Callback(MainShows, title="Classics"), title="Classics"))
 
 	return oc
@@ -40,7 +40,7 @@ def MainShows(title):
 
 	data = HTML.ElementFromURL(SHOWS_URL)
 	# this gets shows from each section of the menu on the show page for featured and classics
-	showList = data.xpath('//div/strong[text()="%s	"]/parent::div/following-sibling::div//ul/li/a' %title)
+	showList = data.xpath('//div/strong[contains(text(),"%s")]/parent::div/following-sibling::div//ul/li/a' %title)
 
 	for s in showList:
 		url = s.xpath('./@href')[0]
@@ -103,12 +103,23 @@ def ShowSection(title, url, thumb=''):
 	vid_type = 'all-videos'
 	url = url +'/video/'
 
-	if thumb:
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url + 'full-episodes', vid_type=vid_type), title="Full Episodes", thumb=thumb))
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url + 'clips', vid_type=vid_type), title="Clips", thumb=thumb))
-	else:
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url + 'full-episodes', vid_type=vid_type), title="Full Episodes"))
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url + 'clips', vid_type=vid_type), title="Clips"))
+	full_url = url + 'full-episodes'
+	clips_url = url + 'clips'
+	# There are a few shows that do not have a full episode page, so we need to check for them first
+	# If there is not a full episode page, we instead just produce an All Videos page
+	try:
+		data = HTML.ElementFromURL(full_url)
+		if thumb:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=full_url, vid_type=vid_type), title="Full Episodes", thumb=thumb))
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=clips_url, vid_type=vid_type), title="Clips", thumb=thumb))
+		else:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=full_url, vid_type=vid_type), title="Full Episodes"))
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=clips_url, vid_type=vid_type), title="Clips"))
+	except:
+		if thumb:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="All Videos", url=url, vid_type=vid_type), title="All Videos", thumb=thumb))
+		else:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="All Videos", url=url, vid_type=vid_type), title="All Videos"))
 
 	return oc
 
