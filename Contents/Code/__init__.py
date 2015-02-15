@@ -16,7 +16,7 @@ def MainMenu():
 	oc = ObjectContainer()
 
 	oc.add(DirectoryObject(key=Callback(AllShow), title="Shows"))
-	oc.add(DirectoryObject(key=Callback(ShowSection, title="Videos", url='http://www.aetv.com/video'), title="Videos"))
+	oc.add(DirectoryObject(key=Callback(AllSection, title="Videos"), title="Videos"))
 
 	return oc
 
@@ -78,17 +78,37 @@ def PopShows(title):
 	return oc
 
 ####################################################################################################
+# This function sets up the url and xpath for the All video page and splits them into full episodes and clips
+# Since the main videos page only offers one url for all videos, the xpath(vid_type) is used to break them up 
+# into full episodes or clips
+@route('/video/aetv/allsection')
+def AllSection(title):
+
+	oc = ObjectContainer(title2=title)
+	url='http://www.aetv.com/video'
+
+	oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes"))
+	oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips"))
+
+	return oc
+
+####################################################################################################
+# This function sets up the url and xpath for shows and splits them into full episodes and clips
+# Since the xpath(vid_type) used for show videos is always 'all-videos', we break them up by adding 
+# full episodes or clips to the end of the url
 @route('/video/aetv/showsection')
 def ShowSection(title, url, thumb=''):
 
 	oc = ObjectContainer(title2=title)
+	vid_type = 'all-videos'
+	url = url +'/video/'
 
 	if thumb:
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes", thumb=thumb))
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips", thumb=thumb))
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url + 'full-episodes', vid_type=vid_type), title="Full Episodes", thumb=thumb))
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url + 'clips', vid_type=vid_type), title="Clips", thumb=thumb))
 	else:
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes"))
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips"))
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url + 'full-episodes', vid_type=vid_type), title="Full Episodes"))
+		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url + 'clips', vid_type=vid_type), title="Clips"))
 
 	return oc
 
@@ -97,14 +117,17 @@ def ShowSection(title, url, thumb=''):
 def ShowsPage(url, title, vid_type):
 
 	oc = ObjectContainer(title2=title)
+	section_title = title
 
-	if url.endswith('/video'):
-		local_url = url + INNER_CONTAINER
+	if url.endswith(INNER_CONTAINER):
+		local_url = url
 	else:
-		local_url = url +'/video' + INNER_CONTAINER
+		local_url = url + INNER_CONTAINER
 
 	data = HTML.ElementFromURL(local_url)		
-	allData = data.xpath('//ul[@id="%s-ul"]/li[not(contains(@class, "behind-wall"))]' %vid_type)
+	# The class for videos from shows no longer contains a behind wall
+	# So changed this xpath to look for data-behind-the-wall field since both types have that
+	allData = data.xpath('//ul[@id="%s-ul"]/li[not(contains(@data-behind-the-wall, "true"))]' %vid_type)
 
 	for s in allData:
 		class_info = s.xpath('./@class')[0]
@@ -159,6 +182,12 @@ def ShowsPage(url, title, vid_type):
 					thumb = Resource.ContentsOfURLWithFallback(url=thumb_url)
 				)
 			)
+	# Need to check for a next page url but only for individual shows
+	if vid_type=='all-videos':
+		try: next_page = data.xpath('//ul/li[contains(@class, "pager-next")]/a/@href')[0]
+		except: next_page = None
+		if next_page:
+			oc.add(NextPageObject(key=Callback(ShowsPage, title=section_title, url=BASE_PATH + next_page, vid_type=vid_type), title = L("Next Page ...")))
 			
 	if len(oc) < 1:
 		#Log ('still no value for objects')
