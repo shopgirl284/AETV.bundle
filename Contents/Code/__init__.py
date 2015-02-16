@@ -16,7 +16,7 @@ def MainMenu():
 	oc = ObjectContainer()
 
 	oc.add(DirectoryObject(key=Callback(AllShow), title="Shows"))
-	oc.add(DirectoryObject(key=Callback(ShowSection, title="Videos", url='http://www.aetv.com/video'), title="Videos"))
+	oc.add(DirectoryObject(key=Callback(AllSection, title="Videos"), title="Videos"))
 
 	return oc
 
@@ -27,7 +27,7 @@ def AllShow():
 	oc = ObjectContainer()
 
 	oc.add(DirectoryObject(key=Callback(PopShows, title="Most Popular"), title="Most Popular"))
-	oc.add(DirectoryObject(key=Callback(MainShows, title="Featured"), title="Featured"))
+	oc.add(DirectoryObject(key=Callback(MainShows, title="Current"), title="Current"))
 	oc.add(DirectoryObject(key=Callback(MainShows, title="Classics"), title="Classics"))
 
 	return oc
@@ -40,7 +40,7 @@ def MainShows(title):
 
 	data = HTML.ElementFromURL(SHOWS_URL)
 	# this gets shows from each section of the menu on the show page for featured and classics
-	showList = data.xpath('//div/strong[text()="%s	"]/parent::div/following-sibling::div//ul/li/a' %title)
+	showList = data.xpath('//div/strong[contains(text(),"%s")]/parent::div/following-sibling::div//ul/li/a' %title)
 
 	for s in showList:
 		url = s.xpath('./@href')[0]
@@ -78,17 +78,48 @@ def PopShows(title):
 	return oc
 
 ####################################################################################################
+# This function sets up the url and xpath for the All video page and splits them into full episodes and clips
+# Since the main videos page only offers one url for all videos, the xpath(vid_type) is used to break them up 
+# into full episodes or clips
+@route('/video/aetv/allsection')
+def AllSection(title):
+
+	oc = ObjectContainer(title2=title)
+	url='http://www.aetv.com/video'
+
+	oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes"))
+	oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips"))
+
+	return oc
+
+####################################################################################################
+# This function sets up the url and xpath for shows and splits them into full episodes and clips
+# Since the xpath(vid_type) used for show videos is always 'all-videos', we break them up by adding 
+# full episodes or clips to the end of the url
 @route('/video/aetv/showsection')
 def ShowSection(title, url, thumb=''):
 
 	oc = ObjectContainer(title2=title)
+	vid_type = 'all-videos'
+	url = url +'/video/'
 
-	if thumb:
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes", thumb=thumb))
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips", thumb=thumb))
-	else:
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=url, vid_type='full-episode'), title="Full Episodes"))
-		oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=url, vid_type='clips'), title="Clips"))
+	full_url = url + 'full-episodes'
+	clips_url = url + 'clips'
+	# There are a few shows that do not have a full episode page, so we need to check for them first
+	# If there is not a full episode page, we instead just produce an All Videos page
+	try:
+		data = HTML.ElementFromURL(full_url)
+		if thumb:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=full_url, vid_type=vid_type), title="Full Episodes", thumb=thumb))
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=clips_url, vid_type=vid_type), title="Clips", thumb=thumb))
+		else:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Full Episodes", url=full_url, vid_type=vid_type), title="Full Episodes"))
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="Clips", url=clips_url, vid_type=vid_type), title="Clips"))
+	except:
+		if thumb:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="All Videos", url=url, vid_type=vid_type), title="All Videos", thumb=thumb))
+		else:
+			oc.add(DirectoryObject(key=Callback(ShowsPage, title="All Videos", url=url, vid_type=vid_type), title="All Videos"))
 
 	return oc
 
@@ -97,14 +128,17 @@ def ShowSection(title, url, thumb=''):
 def ShowsPage(url, title, vid_type):
 
 	oc = ObjectContainer(title2=title)
+	section_title = title
 
-	if url.endswith('/video'):
-		local_url = url + INNER_CONTAINER
+	if url.endswith(INNER_CONTAINER):
+		local_url = url
 	else:
-		local_url = url +'/video' + INNER_CONTAINER
+		local_url = url + INNER_CONTAINER
 
 	data = HTML.ElementFromURL(local_url)		
-	allData = data.xpath('//ul[@id="%s-ul"]/li[not(contains(@class, "behind-wall"))]' %vid_type)
+	# The class for videos from shows no longer contains a behind wall
+	# So changed this xpath to look for data-behind-the-wall field since both types have that
+	allData = data.xpath('//ul[@id="%s-ul"]/li[not(contains(@data-behind-the-wall, "true"))]' %vid_type)
 
 	for s in allData:
 		class_info = s.xpath('./@class')[0]
@@ -159,6 +193,12 @@ def ShowsPage(url, title, vid_type):
 					thumb = Resource.ContentsOfURLWithFallback(url=thumb_url)
 				)
 			)
+	# Need to check for a next page url but only for individual shows
+	if vid_type=='all-videos':
+		try: next_page = data.xpath('//ul/li[contains(@class, "pager-next")]/a/@href')[0]
+		except: next_page = None
+		if next_page:
+			oc.add(NextPageObject(key=Callback(ShowsPage, title=section_title, url=BASE_PATH + next_page, vid_type=vid_type), title = L("Next Page ...")))
 			
 	if len(oc) < 1:
 		#Log ('still no value for objects')
