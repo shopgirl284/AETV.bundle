@@ -110,8 +110,8 @@ def ShowsPage(url, title, season=0):
     data = HTML.ElementFromURL(url)		
     show_name = data.xpath('//meta[@name="aetn:SeriesTitle"]/@content')[0]
     # Check for locked shows
-    # VIDEO THAT HAVE AN EPISODE TYPE OF FREE ARE ACTUALLY THE LOCKED VIDEOS
-    allData = data.xpath('//div[contains(@class, "episode-item") and not(contains(@data-episodetype, "free"))]')
+    # VIDEO THAT HAVE AN EPISODE TYPE OF FREE ARE ACTUALLY THE LOCKED VIDEOS AND INFO ONES HAVE NO VIDEO
+    allData = data.xpath('//div[contains(@class, "episode-item") and not(contains(@data-episodetype, "free"))  and not(contains(@data-episodetype, "info"))]')
 
     for s in allData:
         video_url = s.xpath('./@data-canonical')[0]
