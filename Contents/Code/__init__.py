@@ -2,6 +2,7 @@ TITLE = 'A&E'
 PREFIX = '/video/aetv'
 
 BASE_PATH = 'http://www.aetv.com'
+SHOWS_URL = 'http://www.aetv.com/shows/'
 VIDEO_URL = 'http://www.aetv.com/video'
 INNER_CONTAINER = '_pjax=.inner-container'
 
@@ -127,6 +128,12 @@ def Episodes(show_title, episode_url, clip_url, show_thumb, season):
             thumb = show_thumb
             
         show = item['seriesName'] if 'seriesName' in item else show_title
+        # Fix URL service error for URLs that do not include a unique show folder/directory
+        if '/shows/video/' in url:
+            url = SHOWS_URL + show.lower().replace(' ', '-') + url.split('/shows')[1]
+        # Fix URL service error for URLs that do not include a '/shows/' directory
+        if not '/shows/' in url:
+            url = SHOWS_URL + url.split('www.aetv.com/')[1]
         duration = int(item['totalVideoDuration']) if 'totalVideoDuration' in item else None
         originally_available_at = Datetime.ParseDate(item['originalAirDate'].split('T')[0]).date() if 'originalAirDate' in item else None
         index = int(item['episode']) if 'episode' in item else None
@@ -184,14 +191,14 @@ def ShowsPageOld(url, title, vid_type, show=''):
         summary = s.xpath("./@data-description")[0]
         try: season = int(s.xpath('./@data-season')[0])
         except: season = 1
-        if show:
-            show_name = show
-        else:
-            show_name = s.xpath('.//h5[@class="series"]/text()')[0]
+        show = s.xpath('.//h5[@class="series"]/text()')[0]
+        # Fix URL service error for URLs that do not include a unique show folder/directory
+        if '/shows/video/' in video_url:
+            video_url = SHOWS_URL + show.lower().replace(' ', '-') + video_url.split('/shows')[1]
             
         oc.add(
             EpisodeObject(
-                show = show_name,
+                show = show,
                 season = season,
                 url = video_url,
                 title = title,
