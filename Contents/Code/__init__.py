@@ -12,8 +12,6 @@ CLIPS = 'https://mediaservice.aetndigital.com/SDK_v2/show_titles2/clip/ae?show_n
 
 RE_SEASEP =  Regex('S(\d+) E(\d+)')
 
-OLD_SHOWS_API = 'http://wombatapi.aetv.com/shows2/ae'
-
 ####################################################################################################
 def Start():
 
